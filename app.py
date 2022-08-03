@@ -1,8 +1,11 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from dotenv import load_dotenv
 from meeting_reminder import MeetingReminder
 from pipeline_status_watcher import PipelineStatusWatcher
 from post_a_message import PostAMessage
+
+load_dotenv()
 
 # instantiate the app
 app = Flask(__name__, static_url_path='/')
@@ -23,6 +26,7 @@ def gitlab_pipeline():
         response['repository_name'] = pipeline_status_watcher.repository_name
         response['branch_name'] = pipeline_status_watcher.branch_name
         response['update_counter'] = pipeline_status_watcher.update_counter
+        response['pipeline_comment'] = pipeline_status_watcher.pipeline_comment
     return jsonify(response)
 
 @app.route('/api/post-a-message/post', methods=['POST'])

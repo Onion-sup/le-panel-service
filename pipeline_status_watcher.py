@@ -2,12 +2,15 @@ import time
 from dateutil import parser
 import requests
 import threading
+import openai
 import os
+import json
 
 class PipelineStatusWatcher(threading.Thread):
     def __init__(self):
         self.gitlab_host = os.environ["GITLAB_HOST"]
         gitlab_token = os.environ["GITLAB_TOKEN"]
+        openai.api_key = os.environ["OPENAI_API_KEY"]
         threading.Thread.__init__(self)
         self._headers = {'PRIVATE-TOKEN': gitlab_token}
         self.data_lock = threading.Lock()
@@ -16,6 +19,7 @@ class PipelineStatusWatcher(threading.Thread):
             self.repository_name = 'null'
             self.update_counter = 0
             self.stages_jobs_map = {}
+            self.pipeline_comment = 'null'
 
     def _get_project_url(self):
         return 'https://' + self.gitlab_host + '/api/v4/projects'
@@ -119,6 +123,7 @@ class PipelineStatusWatcher(threading.Thread):
         else:
             branch_name = focused_pipeline['sha'][:8]
 
+        pipeline_comment = self._get_pipeline_comment()
         with self.data_lock:
             self.stages_jobs_map = {}
             self.repository_name = repository_name
@@ -126,7 +131,8 @@ class PipelineStatusWatcher(threading.Thread):
             self.update_counter += 1
             for stage, job_list in stage_jobs_map.items():
                 self.stages_jobs_map[stage] = [{job['name']: job['status']} for job in job_list]
-            print('[update]', self.update_counter, self.repository_name, self.branch_name, self.stages_jobs_map)
+            self.pipeline_comment = pipeline_comment
+            print('[update]', self.pipeline_comment)
 
     def _get_repository_name(self, project):
         repository_name = project['name'].replace('agc-', '')
@@ -145,10 +151,26 @@ class PipelineStatusWatcher(threading.Thread):
         except StopIteration as e:
             print('[PipelineStatusWatcher][_get_pipeline_branch] {}'.format(e))
             return
-        
 
     def _get_branch_name(self, branch):
         return branch['name'].replace('feature_', '')
+
+    def _get_pipeline_comment(self):
+        success_rate = 100
+        fail_rate = 0
+        progress_status = 20
+        openai_instruction = "Bref commentaire rigolo en français d'une pipeline de tests actuellement \
+                                à {}% de progression qui pour l'instant a {}% de réussite et {}% d'échec:" \
+                                .format(progress_status, success_rate, fail_rate)
+        response = openai.Completion.create(
+            model="text-davinci-002",
+            prompt=openai_instruction,
+            temperature=1,
+            max_tokens=100
+        )
+        comment = response.choices[0].text
+        comment = comment.strip('\n')
+        return comment
 
     # def first_started_job_list_comparator(self, jobs_1, jobs_2):
     #     min_job_start_date_1 = None
