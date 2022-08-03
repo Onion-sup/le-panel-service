@@ -6,8 +6,8 @@ import os
 
 class PipelineStatusWatcher(threading.Thread):
     def __init__(self):
-        self.gitlab_host = os.environ.get("GITLAB_HOST")
-        gitlab_token = os.environ.get("GITLAB_TOKEN")
+        self.gitlab_host = os.environ["GITLAB_HOST"]
+        gitlab_token = os.environ["GITLAB_TOKEN"]
         threading.Thread.__init__(self)
         self._headers = {'PRIVATE-TOKEN': gitlab_token}
         self.data_lock = threading.Lock()

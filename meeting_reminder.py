@@ -19,7 +19,7 @@ class MeetingReminder():
     def get_next_meeting_events(self):
         date_time = datetime.fromtimestamp(time.time())
         query = self.calendar.new_query('start').greater_equal(date_time)
-        query.chain('and').on_attribute('end').less_equal(date_time + timedelta(days=6))
+        query.chain('and').on_attribute('end').less_equal(date_time + timedelta(hours=12))
         events = self.calendar.get_events(query=query)
         return [event for event in events if not event.is_cancelled and "Daily Sprint" not in event.subject]
             
@@ -30,14 +30,15 @@ class MeetingReminder():
         
         today_date = datetime.today().date()
         if meeting_event.start.date() == today_date:
-            start_date_str = 'Aujourd\'hui'
+            # start_date_str = 'Aujourd\'hui'
+            start_date_str = ''
         elif meeting_event.start.date() == today_date + timedelta(days=1):
             start_date_str = 'Demain'
         else:
             start_date_str = self.day_names[meeting_event.start.date().weekday()] + ' ' + meeting_event.start.date().strftime("%d/%m")
         
         if meeting_event.start.date() == meeting_event.end.date():
-            return '{} {} à {} {}, {}'.format(start_date_str,
+            return 'Rappel: {} {} {} {}, {}'.format(start_date_str,
                                                     meeting_event.start.time().strftime("%H:%M"),
                                                     meeting_event.end.time().strftime("%H:%M"),
                                                     meeting_event.subject,
@@ -45,4 +46,5 @@ class MeetingReminder():
 
 if '__main__' == __name__:
     meeting_reminder = MeetingReminder()
-    meeting_reminder.get_next_meeting_events()
+    for event in meeting_reminder.get_next_meeting_events():
+        print(meeting_reminder.meeting_event_to_str(event))

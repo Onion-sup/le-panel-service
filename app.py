@@ -8,8 +8,8 @@ from post_a_message import PostAMessage
 app = Flask(__name__, static_url_path='/')
 app.config.from_object(__name__)
 
-# pipeline_status_watcher = PipelineStatusWatcher()
-# pipeline_status_watcher.start()
+pipeline_status_watcher = PipelineStatusWatcher()
+pipeline_status_watcher.start()
 post_a_message = PostAMessage()
 meeting_reminder = MeetingReminder()
 # enable COR
