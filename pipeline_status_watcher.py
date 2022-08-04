@@ -20,6 +20,7 @@ class PipelineStatusWatcher(threading.Thread):
             self.update_counter = 0
             self.stages_jobs_map = {}
             self.pipeline_comment = 'null'
+        self.openai_instruction = None
 
     def _get_project_url(self):
         return 'https://' + self.gitlab_host + '/api/v4/projects'
@@ -122,8 +123,7 @@ class PipelineStatusWatcher(threading.Thread):
             branch_name = self._get_branch_name(branch)
         else:
             branch_name = focused_pipeline['sha'][:8]
-
-        pipeline_comment = self._get_pipeline_comment()
+        pipeline_comment = self._get_pipeline_comment(stage_jobs_map)
         with self.data_lock:
             self.stages_jobs_map = {}
             self.repository_name = repository_name
@@ -132,8 +132,14 @@ class PipelineStatusWatcher(threading.Thread):
             for stage, job_list in stage_jobs_map.items():
                 self.stages_jobs_map[stage] = [{job['name']: job['status']} for job in job_list]
             self.pipeline_comment = pipeline_comment
-            print('[update]', self.pipeline_comment)
+            print('[PipelineStatusWatcher][update]', self.repository_name)
+            print('[PipelineStatusWatcher][update]', self.branch_name)
+            print('[PipelineStatusWatcher][update]', self.update_counter)
+            print('[PipelineStatusWatcher][update]', self.stages_jobs_map)
+            print('[PipelineStatusWatcher][update]', self.pipeline_comment)
 
+
+        
     def _get_repository_name(self, project):
         repository_name = project['name'].replace('agc-', '')
         repository_name = repository_name.replace('python3-', '')
@@ -155,13 +161,37 @@ class PipelineStatusWatcher(threading.Thread):
     def _get_branch_name(self, branch):
         return branch['name'].replace('feature_', '')
 
-    def _get_pipeline_comment(self):
-        success_rate = 100
-        fail_rate = 0
-        progress_status = 20
+    def _get_pipeline_comment(self, stage_jobs_map):
+        success_cnt = 0
+        failed_cnt = 0
+        canceled_cnt = 0
+        running_cnt = 0
+        pending_cnt = 0
+        for job_list in stage_jobs_map.values():
+            for job in job_list:
+                if job['status'] == 'pending':
+                    pending_cnt += 1
+                elif job['status'] == 'running':
+                    running_cnt += 1
+                elif job['status'] == 'success':
+                    success_cnt += 1
+                elif job['status'] == 'failed':
+                    failed_cnt += 1
+                elif job['status'] == 'canceled':
+                    canceled_cnt += 1
+        total = pending_cnt + running_cnt + success_cnt + failed_cnt + canceled_cnt
+        success_rate = success_cnt/(failed_cnt + canceled_cnt + success_cnt) * 100 if (failed_cnt + canceled_cnt + success_cnt) != 0 else 100
+        fail_rate = (failed_cnt + canceled_cnt)/(success_cnt + failed_cnt) * 100 if (success_cnt + failed_cnt) != 0 else 100
+        progress_status = 100 - (pending_cnt + running_cnt)/total * 100 if total != 0 else 100
+         
         openai_instruction = "Bref commentaire rigolo en français d'une pipeline de tests actuellement \
-                                à {}% de progression qui pour l'instant a {}% de réussite et {}% d'échec:" \
-                                .format(progress_status, success_rate, fail_rate)
+                                à {}% de progression qui a {}% de réussite et {}% d'échec:" \
+                                .format(int(progress_status), int(success_rate), int(fail_rate))
+        
+        if openai_instruction == self.openai_instruction:
+            return self.pipeline_comment
+        
+        self.openai_instruction = openai_instruction
         response = openai.Completion.create(
             model="text-davinci-002",
             prompt=openai_instruction,
@@ -169,7 +199,7 @@ class PipelineStatusWatcher(threading.Thread):
             max_tokens=100
         )
         comment = response.choices[0].text
-        comment = comment.strip('\n')
+        comment = comment.strip('\n').strip('"')
         return comment
 
     # def first_started_job_list_comparator(self, jobs_1, jobs_2):
